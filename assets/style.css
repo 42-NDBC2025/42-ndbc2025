@@ -3,33 +3,22 @@ body {
     padding: 0;
     font-family: Arial, sans-serif;
     background-color: #f5f5f5;
-    /* 确保body可以包含绝对定位元素 */
-    position: relative;
-    min-height: 100vh;
 }
 
-/* 主容器样式 */
-#viewerContainer {
-    /* 移除绝对定位，改用常规布局 */
-    position: relative;
-    width: 100%;
-    max-width: 800px; /* 控制最大宽度 */
-    margin: 0 auto; /* 这是实现居中的关键 */
-    padding: 20px 0;
-    background: white;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-}
-
-/* 单页PDF样式 */
+/* 保持PDF页面居中显示 */
 .page {
-    /* 确保每页PDF居中 */
-    display: block;
     margin: 0 auto;
-    /* 添加页间间距 */
-    margin-bottom: 20px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    background: white;
+}
+/* 新增的居中样式 */
+#viewerContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 0;
 }
 
-/* 最后一项不需要底部间距 */
-.page:last-child {
-    margin-bottom: 0;
+.page {
+    margin: 0 auto; /* 确保每页都居中 */
 }
