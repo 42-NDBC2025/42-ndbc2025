@@ -2,38 +2,14 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=3.0, user-scalable=yes">
     <title>会议手册</title>
     <link rel="stylesheet" href="assets/style.css">
-    <style>
-        /* 隐藏所有PDF.js的界面元素 */
-        #viewerContainer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-        }
-        .pdfViewer .page {
-            margin: 0 auto;
-            box-shadow: none;
-            border: none;
-        }
-        /* 禁用文本选择（可选） */
-        body {
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-        }
-    </style>
 </head>
 <body>
-    <!-- PDF.js查看器容器 -->
-    <div id="viewerContainer"></div>
-
-    <!-- 引入PDF.js库 -->
+    <div id="pdfContainer">
+        <!-- PDF页面将通过Canvas动态插入这里 -->
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
     <script src="assets/script.js"></script>
 </body>
