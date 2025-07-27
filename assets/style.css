@@ -27,9 +27,9 @@ body {
 @media screen and (max-width: 768px) {
     /* 初始放大设置 */
     body {
-        transform: scale(1.5);
+        transform: scale(1.0);
         transform-origin: top center;
-        width: 150%;
+        width: 100%;
         overflow-x: auto;
     }
     
