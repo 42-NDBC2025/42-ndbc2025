@@ -2,14 +2,15 @@
 const config = {
     pdfUrl: 'assets/current.pdf',
     desktopScale: 1.0,
-    mobileInitialScale: 1.8, // 移动端初始放大比例
-    minScale: null, // 动态计算最小缩放
+    mobileInitialScale: 1.5, // 稍微降低初始缩放比例
+    minScale: null, // 动态计算
     maxScale: 3.0,
     pageSpacing: 15,
     quality: {
         mobile: 2,
         desktop: 1
-    }
+    },
+    pagePadding: 16 // 添加页面内边距
 };
 
 let pdfRenderer = {
@@ -17,7 +18,7 @@ let pdfRenderer = {
     currentScale: 1.0,
     isMobile: false,
     pdfDocument: null,
-    naturalPageWidth: 0, // 存储PDF自然宽度
+    naturalPageWidth: 0,
     
     init: function() {
         this.isMobile = window.innerWidth < 768;
@@ -29,7 +30,6 @@ let pdfRenderer = {
         pdfjsLib.getDocument(config.pdfUrl).promise
             .then(pdfDoc => {
                 this.pdfDocument = pdfDoc;
-                // 获取第一页的自然宽度用于计算最小缩放
                 return pdfDoc.getPage(1);
             })
             .then(firstPage => {
@@ -44,15 +44,14 @@ let pdfRenderer = {
             });
     },
     
-    // 计算最小缩放比例(使页面宽度适应屏幕)
     calculateMinScale: function() {
         if (!this.isMobile) {
             config.minScale = 0.8;
             return;
         }
         
-        const screenWidth = this.container.clientWidth - 20; // 留出边距
-        config.minScale = screenWidth / this.naturalPageWidth;
+        const screenWidth = this.container.clientWidth - (config.pagePadding * 2);
+        config.minScale = Math.min(screenWidth / this.naturalPageWidth, 1.0);
         console.log('Calculated min scale:', config.minScale);
     },
     
@@ -60,31 +59,29 @@ let pdfRenderer = {
         const pageDiv = document.createElement('div');
         pageDiv.className = 'page-container';
         pageDiv.dataset.pageNumber = pageNum;
+        
+        // 设置容器初始尺寸
+        const initialScale = this.isMobile ? config.mobileInitialScale : config.desktopScale;
+        const qualityFactor = this.isMobile ? config.quality.mobile : config.quality.desktop;
+        const baseWidth = this.naturalPageWidth * initialScale;
+        
+        pageDiv.style.width = `${baseWidth}px`;
+        pageDiv.style.padding = `${config.pagePadding}px`;
         this.container.appendChild(pageDiv);
         
         this.pdfDocument.getPage(pageNum).then(page => {
-            const targetScale = this.isMobile ? 
-                config.mobileInitialScale : 
-                config.desktopScale;
-            
-            const qualityFactor = this.isMobile ? 
-                config.quality.mobile : 
-                config.quality.desktop;
-            
             const viewport = page.getViewport({ 
-                scale: targetScale * qualityFactor 
+                scale: initialScale * qualityFactor 
             });
             
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
             
-            const displayWidth = viewport.width / qualityFactor;
-            const displayHeight = viewport.height / qualityFactor;
-            
-            canvas.style.width = `${displayWidth}px`;
-            canvas.style.height = `${displayHeight}px`;
+            // 设置Canvas尺寸
             canvas.width = viewport.width;
             canvas.height = viewport.height;
+            canvas.style.width = '100%';
+            canvas.style.height = 'auto';
             
             canvas.className = 'pdf-page';
             pageDiv.appendChild(canvas);
@@ -115,7 +112,6 @@ let pdfRenderer = {
     },
     
     setupEvents: function() {
-        // 窗口大小变化
         window.addEventListener('resize', () => {
             clearTimeout(this.resizeTimer);
             this.resizeTimer = setTimeout(() => {
@@ -128,8 +124,9 @@ let pdfRenderer = {
             }, 200);
         });
         
-        // 双指缩放
+        // 触摸缩放
         let initialDistance = null;
+        let initialScale = 1.0;
         
         this.container.addEventListener('touchstart', (e) => {
             if (e.touches.length === 2) {
@@ -137,6 +134,7 @@ let pdfRenderer = {
                     e.touches[0].clientX - e.touches[1].clientX,
                     e.touches[0].clientY - e.touches[1].clientY
                 );
+                initialScale = this.currentScale;
             }
         }, { passive: true });
         
@@ -149,31 +147,25 @@ let pdfRenderer = {
                     e.touches[0].clientY - e.touches[1].clientY
                 );
                 
-                const scaleDelta = (currentDistance - initialDistance) / 100;
-                this.handleZoom(scaleDelta);
-                initialDistance = currentDistance;
+                const newScale = (currentDistance / initialDistance) * initialScale;
+                this.setScale(newScale);
             }
         }, { passive: false });
         
-        // 双击重置缩放
-        this.container.addEventListener('dblclick', () => {
-            if (this.isMobile) {
-                this.currentScale = config.mobileInitialScale;
-                this.applyZoom();
+        // 鼠标滚轮缩放
+        this.container.addEventListener('wheel', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                const delta = e.deltaY < 0 ? 0.1 : -0.1;
+                this.setScale(this.currentScale + delta);
             }
-        });
+        }, { passive: false });
     },
     
-    handleZoom: function(delta) {
+    setScale: function(newScale) {
         if (!this.isMobile) return;
         
-        const newScale = Math.min(
-            Math.max(
-                this.currentScale + delta, 
-                config.minScale
-            ), 
-            config.maxScale
-        );
+        newScale = Math.min(Math.max(newScale, config.minScale), config.maxScale);
         
         if (newScale !== this.currentScale) {
             this.currentScale = newScale;
@@ -184,17 +176,20 @@ let pdfRenderer = {
     applyZoom: function() {
         const pageContainers = document.querySelectorAll('.page-container');
         pageContainers.forEach(container => {
+            // 同步缩放容器和内容
             container.style.transform = `scale(${this.currentScale})`;
             container.style.transformOrigin = 'top center';
-            container.style.marginBottom = `${15 * this.currentScale}px`;
+            
+            // 调整容器实际占用空间
+            const baseWidth = this.naturalPageWidth * config.mobileInitialScale;
+            container.style.width = `${baseWidth}px`;
+            container.style.marginBottom = `${config.pageSpacing * this.currentScale}px`;
         });
     }
 };
 
-// 初始化
 document.addEventListener('DOMContentLoaded', () => {
     pdfRenderer.init();
 });
 
-// 禁用右键菜单
 document.addEventListener('contextmenu', e => e.preventDefault());
