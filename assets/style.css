@@ -22,3 +22,35 @@ body {
 .page {
     margin: 0 auto; /* 确保每页都居中 */
 }
+/* 保留原有样式，添加以下内容 */
+
+/* 响应式PDF容器 */
+#viewerContainer {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch; /* 改善iOS滚动体验 */
+    padding: 10px 0;
+}
+
+/* PDF页面样式 */
+.page {
+    margin: 0 auto;
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    background: white;
+    /* 添加最大宽度限制 */
+    max-width: 100%;
+    overflow: hidden;
+}
+
+/* 移动端特定样式 */
+@media screen and (max-width: 768px) {
+    body {
+        /* 允许移动端缩放 */
+        touch-action: manipulation;
+    }
+    
+    .page {
+        /* 移动端增加一些边距 */
+        margin: 0 auto 15px;
+    }
+}

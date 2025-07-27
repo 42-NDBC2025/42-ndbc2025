@@ -1,32 +1,39 @@
 // 设置PDF.js worker路径
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
-// 你的PDF文件路径（保持原assets目录结构）
+// 你的PDF文件路径
 const pdfUrl = 'assets/current.pdf';
 
 // 初始化PDF查看器
 const container = document.getElementById('viewerContainer');
 
-// 创建自定义的简单查看器
-const pdfViewer = {
-    container: container,
-    scrollPageIntoView: function(options) {
-        // 简单的页面滚动功能
-        const pageView = this._pages[options.pageNumber - 1];
-        pageView.div.scrollIntoView();
-    },
-    _pages: []
-};
+// 计算适合屏幕的缩放比例
+function calculateScale(viewportWidth = window.innerWidth) {
+    // 基础缩放比例
+    let baseScale = 1.0;
+    
+    // 如果是移动设备
+    if (viewportWidth < 768) {
+        // 根据屏幕宽度动态计算比例
+        baseScale = Math.min(1.5, Math.max(0.8, viewportWidth / 600));
+    }
+    
+    return baseScale;
+}
 
-// 加载PDF文档
-pdfjsLib.getDocument(pdfUrl).promise.then(function(pdfDocument) {
-    // 文档加载完成
+// 渲染PDF页面
+function renderPDF(pdfDocument) {
+    // 清空容器
+    container.innerHTML = '';
+    
     const numPages = pdfDocument.numPages;
+    const viewportWidth = container.clientWidth;
+    const scale = calculateScale(viewportWidth);
     
     // 逐页渲染
     for (let i = 1; i <= numPages; i++) {
         pdfDocument.getPage(i).then(function(page) {
-            const viewport = page.getViewport({ scale: 1.5 });
+            const viewport = page.getViewport({ scale: scale });
             
             // 创建页面容器
             const pageDiv = document.createElement('div');
@@ -47,13 +54,7 @@ pdfjsLib.getDocument(pdfUrl).promise.then(function(pdfDocument) {
                 viewport: viewport
             });
             
-            // 保存页面引用
-            pdfViewer._pages.push({
-                div: pageDiv,
-                pageNumber: i
-            });
-            
-            // 添加页间间距（可选）
+            // 添加页间间距
             if (i < numPages) {
                 const spacer = document.createElement('div');
                 spacer.style.height = '20px';
@@ -61,9 +62,24 @@ pdfjsLib.getDocument(pdfUrl).promise.then(function(pdfDocument) {
             }
         });
     }
+}
+
+// 加载PDF文档
+pdfjsLib.getDocument(pdfUrl).promise.then(function(pdfDocument) {
+    // 初始渲染
+    renderPDF(pdfDocument);
+    
+    // 窗口大小改变时重新渲染
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(function() {
+            renderPDF(pdfDocument);
+        }, 200); // 200ms防抖
+    });
 }).catch(function(error) {
-    console.error('加载PDF出错:', error);
-    container.innerHTML = '<p>无法加载文档内容</p>';
+    console.error('加载失败:', error);
+    container.innerHTML = '<p>加载失败，请检查网络</p>';
 });
 
 // 禁用右键菜单（可选）
