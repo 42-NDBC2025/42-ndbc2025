@@ -1,72 +1,202 @@
-// 设置PDF.js worker路径
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
-
-// 你的PDF文件路径（保持原assets目录结构）
-const pdfUrl = 'assets/current.pdf';
-
-// 初始化PDF查看器
-const container = document.getElementById('viewerContainer');
-
-// 创建自定义的简单查看器
-const pdfViewer = {
-    container: container,
-    scrollPageIntoView: function(options) {
-        // 简单的页面滚动功能
-        const pageView = this._pages[options.pageNumber - 1];
-        pageView.div.scrollIntoView();
+// 高清PDF渲染配置
+const config = {
+    pdfUrl: 'assets/current.pdf',
+    desktopScale: 1.0,
+    mobileInitialScale: 1.5, // 稍微降低初始缩放比例
+    minScale: null, // 动态计算
+    maxScale: 3.0,
+    pageSpacing: 15,
+    quality: {
+        mobile: 2,
+        desktop: 1
     },
-    _pages: []
+    pagePadding: 16 // 添加页面内边距
 };
 
-// 加载PDF文档
-pdfjsLib.getDocument(pdfUrl).promise.then(function(pdfDocument) {
-    // 文档加载完成
-    const numPages = pdfDocument.numPages;
+let pdfRenderer = {
+    container: document.getElementById('viewerContainer'),
+    currentScale: 1.0,
+    isMobile: false,
+    pdfDocument: null,
+    naturalPageWidth: 0,
     
-    // 逐页渲染
-    for (let i = 1; i <= numPages; i++) {
-        pdfDocument.getPage(i).then(function(page) {
-            const viewport = page.getViewport({ scale: 1.5 });
+    init: function() {
+        this.isMobile = window.innerWidth < 768;
+        this.loadDocument();
+        this.setupEvents();
+    },
+    
+    loadDocument: function() {
+        pdfjsLib.getDocument(config.pdfUrl).promise
+            .then(pdfDoc => {
+                this.pdfDocument = pdfDoc;
+                return pdfDoc.getPage(1);
+            })
+            .then(firstPage => {
+                const viewport = firstPage.getViewport({ scale: 1.0 });
+                this.naturalPageWidth = viewport.width;
+                this.calculateMinScale();
+                this.renderAllPages();
+            })
+            .catch(error => {
+                console.error('加载错误:', error);
+                this.container.innerHTML = '<div class="error">加载失败，请刷新重试</div>';
+            });
+    },
+    
+    calculateMinScale: function() {
+        if (!this.isMobile) {
+            config.minScale = 0.8;
+            return;
+        }
+        
+        const screenWidth = this.container.clientWidth - (config.pagePadding * 2);
+        config.minScale = Math.min(screenWidth / this.naturalPageWidth, 1.0);
+        console.log('Calculated min scale:', config.minScale);
+    },
+    
+    renderPage: function(pageNum) {
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'page-container';
+        pageDiv.dataset.pageNumber = pageNum;
+        
+        // 设置容器初始尺寸
+        const initialScale = this.isMobile ? config.mobileInitialScale : config.desktopScale;
+        const qualityFactor = this.isMobile ? config.quality.mobile : config.quality.desktop;
+        const baseWidth = this.naturalPageWidth * initialScale;
+        
+        pageDiv.style.width = `${baseWidth}px`;
+        pageDiv.style.padding = `${config.pagePadding}px`;
+        this.container.appendChild(pageDiv);
+        
+        this.pdfDocument.getPage(pageNum).then(page => {
+            const viewport = page.getViewport({ 
+                scale: initialScale * qualityFactor 
+            });
             
-            // 创建页面容器
-            const pageDiv = document.createElement('div');
-            pageDiv.className = 'page';
-            pageDiv.setAttribute('data-page-number', i);
-            container.appendChild(pageDiv);
-            
-            // 创建Canvas用于渲染
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
-            canvas.height = viewport.height;
+            
+            // 设置Canvas尺寸
             canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            canvas.style.width = '100%';
+            canvas.style.height = 'auto';
+            
+            canvas.className = 'pdf-page';
             pageDiv.appendChild(canvas);
             
-            // 渲染PDF页面
             page.render({
                 canvasContext: context,
-                viewport: viewport
+                viewport: viewport,
+                intent: 'display'
             });
             
-            // 保存页面引用
-            pdfViewer._pages.push({
-                div: pageDiv,
-                pageNumber: i
-            });
-            
-            // 添加页间间距（可选）
-            if (i < numPages) {
+            if (pageNum < this.pdfDocument.numPages) {
                 const spacer = document.createElement('div');
-                spacer.style.height = '20px';
-                container.appendChild(spacer);
+                spacer.className = 'page-spacer';
+                this.container.appendChild(spacer);
             }
         });
+    },
+    
+    renderAllPages: function() {
+        this.container.innerHTML = '';
+        this.currentScale = this.isMobile ? config.mobileInitialScale : config.desktopScale;
+        
+        for (let i = 1; i <= this.pdfDocument.numPages; i++) {
+            this.renderPage(i);
+        }
+        
+        this.applyZoom();
+    },
+    
+    setupEvents: function() {
+        window.addEventListener('resize', () => {
+            clearTimeout(this.resizeTimer);
+            this.resizeTimer = setTimeout(() => {
+                const newIsMobile = window.innerWidth < 768;
+                if (newIsMobile !== this.isMobile) {
+                    this.isMobile = newIsMobile;
+                    this.calculateMinScale();
+                    this.renderAllPages();
+                }
+            }, 200);
+        });
+        
+        // 触摸缩放
+        // 改进的双指缩放实现
+        let touchStartDistance = null;
+        let touchStartScale = null;
+    
+        this.container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                touchStartDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                touchStartScale = this.currentScale;
+            }
+        }, { passive: false }); // 注意这里改为非passive
+    
+        this.container.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && touchStartDistance) {
+                e.preventDefault();
+            
+                const currentDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+            
+                // 计算缩放比例变化
+                const scale = (currentDistance / touchStartDistance) * touchStartScale;
+                this.setScale(scale);
+            }
+        }, { passive: false }); // 注意这里改为非passive
+    
+        this.container.addEventListener('touchend', () => {
+            touchStartDistance = null;
+        });
+        
+        // 鼠标滚轮缩放
+        this.container.addEventListener('wheel', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                const delta = e.deltaY < 0 ? 0.1 : -0.1;
+                this.setScale(this.currentScale + delta);
+            }
+        }, { passive: false });
+    },
+    
+    setScale: function(newScale) {
+        if (!this.isMobile) return;
+        
+        newScale = Math.min(Math.max(newScale, config.minScale), config.maxScale);
+        
+        if (newScale !== this.currentScale) {
+            this.currentScale = newScale;
+            this.applyZoom();
+        }
+    },
+    
+    applyZoom: function() {
+        const pageContainers = document.querySelectorAll('.page-container');
+        pageContainers.forEach(container => {
+            // 同步缩放容器和内容
+            container.style.transform = `scale(${this.currentScale})`;
+            container.style.transformOrigin = 'top center';
+            
+            // 调整容器实际占用空间
+            const baseWidth = this.naturalPageWidth * config.mobileInitialScale;
+            container.style.width = `${baseWidth}px`;
+            container.style.marginBottom = `${config.pageSpacing * this.currentScale}px`;
+        });
     }
-}).catch(function(error) {
-    console.error('加载PDF出错:', error);
-    container.innerHTML = '<p>无法加载文档内容</p>';
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    pdfRenderer.init();
 });
 
-// 禁用右键菜单（可选）
-document.addEventListener('contextmenu', function(e) {
-    e.preventDefault();
-});
+document.addEventListener('contextmenu', e => e.preventDefault());

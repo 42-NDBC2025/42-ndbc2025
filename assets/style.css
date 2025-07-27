@@ -1,24 +1,75 @@
+/* 基础样式 */
 body {
     margin: 0;
     padding: 0;
-    font-family: Arial, sans-serif;
-    background-color: #f5f5f5;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: none;
+    touch-action: pan-y pinch-zoom;
 }
 
-/* 保持PDF页面居中显示 */
-.page {
-    margin: 0 auto;
-    box-shadow: 0 0 5px rgba(0,0,0,0.1);
-    background: white;
-}
-/* 新增的居中样式 */
+/* PDF容器 */
 #viewerContainer {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px 0;
+    width: 100%;
+    padding: 10px 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
-.page {
-    margin: 0 auto; /* 确保每页都居中 */
+/* 页面容器 */
+.page-container {
+    margin: 0 auto;
+    transition: transform 0.2s ease-out;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    background: white;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+/* PDF页面Canvas */
+.pdf-page {
+    display: block;
+    width: 100%;
+    height: auto;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}
+
+/* 页间距 */
+.page-spacer {
+    height: 15px;
+}
+
+/* 错误提示 */
+.error {
+    padding: 20px;
+    text-align: center;
+    color: #d32f2f;
+}
+
+/* 移动端优化 */
+@media screen and (max-width: 768px) {
+    .page-container {
+        /* 初始状态不缩放，由JS控制 */
+        transform: none !important;
+        max-width: none !important;
+        width: auto !important;
+    }
+    
+    /* 高清渲染增强 */
+    .pdf-page {
+        image-rendering: high-quality;
+    }
+    
+    /* 容器内边距 */
+    .page-container {
+        padding: 16px;
+    }
+}
+
+/* 桌面端样式 */
+@media screen and (min-width: 769px) {
+    .page-container {
+        max-width: 800px;
+        margin: 0 auto 20px;
+    }
 }
