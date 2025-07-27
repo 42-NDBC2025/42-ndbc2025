@@ -30,13 +30,21 @@ body {
     background: white;
 }
 
-/* 移动端优化 */
+/* 移动端优化增强 */
 @media screen and (max-width: 768px) {
     .page-container {
-        padding: 5px 0;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0 auto;
+        max-width: 100%;
     }
     
-    /* 允许移动设备缩放 */
+    .page {
+        image-rendering: crisp-edges;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    /* 允许用户双指缩放 */
     html {
         touch-action: pan-y pinch-zoom;
     }
