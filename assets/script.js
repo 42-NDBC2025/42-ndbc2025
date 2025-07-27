@@ -3,35 +3,39 @@ const config = {
     pdfUrl: 'assets/current.pdf',
     desktopScale: 1.0,
     mobileInitialScale: 1.8, // 移动端初始放大比例
-    mobileNormalScale: 1.0, // 移动端正常比例
-    minScale: 0.8,
+    minScale: null, // 动态计算最小缩放
     maxScale: 3.0,
     pageSpacing: 15,
     quality: {
-        mobile: 2, // 移动端分辨率倍增(提高清晰度)
+        mobile: 2,
         desktop: 1
     }
 };
 
-// 高清渲染器
 let pdfRenderer = {
     container: document.getElementById('viewerContainer'),
     currentScale: 1.0,
     isMobile: false,
     pdfDocument: null,
+    naturalPageWidth: 0, // 存储PDF自然宽度
     
-    // 初始化
     init: function() {
         this.isMobile = window.innerWidth < 768;
         this.loadDocument();
         this.setupEvents();
     },
     
-    // 加载PDF文档
     loadDocument: function() {
         pdfjsLib.getDocument(config.pdfUrl).promise
             .then(pdfDoc => {
                 this.pdfDocument = pdfDoc;
+                // 获取第一页的自然宽度用于计算最小缩放
+                return pdfDoc.getPage(1);
+            })
+            .then(firstPage => {
+                const viewport = firstPage.getViewport({ scale: 1.0 });
+                this.naturalPageWidth = viewport.width;
+                this.calculateMinScale();
                 this.renderAllPages();
             })
             .catch(error => {
@@ -40,7 +44,18 @@ let pdfRenderer = {
             });
     },
     
-    // 渲染单页(高清版)
+    // 计算最小缩放比例(使页面宽度适应屏幕)
+    calculateMinScale: function() {
+        if (!this.isMobile) {
+            config.minScale = 0.8;
+            return;
+        }
+        
+        const screenWidth = this.container.clientWidth - 20; // 留出边距
+        config.minScale = screenWidth / this.naturalPageWidth;
+        console.log('Calculated min scale:', config.minScale);
+    },
+    
     renderPage: function(pageNum) {
         const pageDiv = document.createElement('div');
         pageDiv.className = 'page-container';
@@ -48,7 +63,6 @@ let pdfRenderer = {
         this.container.appendChild(pageDiv);
         
         this.pdfDocument.getPage(pageNum).then(page => {
-            // 计算缩放和分辨率
             const targetScale = this.isMobile ? 
                 config.mobileInitialScale : 
                 config.desktopScale;
@@ -61,11 +75,9 @@ let pdfRenderer = {
                 scale: targetScale * qualityFactor 
             });
             
-            // 创建高清Canvas
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
             
-            // 设置Canvas显示尺寸和渲染尺寸
             const displayWidth = viewport.width / qualityFactor;
             const displayHeight = viewport.height / qualityFactor;
             
@@ -77,14 +89,12 @@ let pdfRenderer = {
             canvas.className = 'pdf-page';
             pageDiv.appendChild(canvas);
             
-            // 高清渲染
             page.render({
                 canvasContext: context,
                 viewport: viewport,
-                intent: 'display' // 提高渲染质量
+                intent: 'display'
             });
             
-            // 添加页间距
             if (pageNum < this.pdfDocument.numPages) {
                 const spacer = document.createElement('div');
                 spacer.className = 'page-spacer';
@@ -93,39 +103,67 @@ let pdfRenderer = {
         });
     },
     
-    // 渲染所有页面
     renderAllPages: function() {
         this.container.innerHTML = '';
+        this.currentScale = this.isMobile ? config.mobileInitialScale : config.desktopScale;
         
         for (let i = 1; i <= this.pdfDocument.numPages; i++) {
             this.renderPage(i);
         }
+        
+        this.applyZoom();
     },
     
-    // 设置事件监听
     setupEvents: function() {
-        // 窗口大小变化时重新渲染
+        // 窗口大小变化
         window.addEventListener('resize', () => {
             clearTimeout(this.resizeTimer);
             this.resizeTimer = setTimeout(() => {
                 const newIsMobile = window.innerWidth < 768;
                 if (newIsMobile !== this.isMobile) {
                     this.isMobile = newIsMobile;
+                    this.calculateMinScale();
                     this.renderAllPages();
                 }
             }, 200);
         });
         
-        // 双指缩放支持
-        this.container.addEventListener('wheel', (e) => {
-            if (e.ctrlKey || e.metaKey) {
+        // 双指缩放
+        let initialDistance = null;
+        
+        this.container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                initialDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+            }
+        }, { passive: true });
+        
+        this.container.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && initialDistance) {
                 e.preventDefault();
-                this.handleZoom(e.deltaY < 0 ? 0.1 : -0.1);
+                
+                const currentDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                
+                const scaleDelta = (currentDistance - initialDistance) / 100;
+                this.handleZoom(scaleDelta);
+                initialDistance = currentDistance;
             }
         }, { passive: false });
+        
+        // 双击重置缩放
+        this.container.addEventListener('dblclick', () => {
+            if (this.isMobile) {
+                this.currentScale = config.mobileInitialScale;
+                this.applyZoom();
+            }
+        });
     },
     
-    // 处理缩放
     handleZoom: function(delta) {
         if (!this.isMobile) return;
         
@@ -143,12 +181,12 @@ let pdfRenderer = {
         }
     },
     
-    // 应用缩放
     applyZoom: function() {
         const pageContainers = document.querySelectorAll('.page-container');
         pageContainers.forEach(container => {
             container.style.transform = `scale(${this.currentScale})`;
             container.style.transformOrigin = 'top center';
+            container.style.marginBottom = `${15 * this.currentScale}px`;
         });
     }
 };
