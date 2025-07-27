@@ -13,7 +13,7 @@ function renderPDF(url) {
         for (let i = 1; i <= pdf.numPages; i++) {
             pdf.getPage(i).then(function(page) {
                 // 计算适合屏幕的缩放比例
-                const viewport = page.getViewport({ scale: 1.5 }); // 初始放大1.5倍
+                const viewport = page.getViewport({ scale: 1.0 }); // 初始放大1.5倍
                 
                 // 创建Canvas
                 const canvas = document.createElement('canvas');
@@ -50,6 +50,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 移动端提示
     if (window.innerWidth < 768) {
-        alert('请使用双指缩放来调整文档大小');
+        
     }
 });
