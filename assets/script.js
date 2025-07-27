@@ -125,32 +125,39 @@ let pdfRenderer = {
         });
         
         // 触摸缩放
-        let initialDistance = null;
-        let initialScale = 1.0;
-        
+        // 改进的双指缩放实现
+        let touchStartDistance = null;
+        let touchStartScale = null;
+    
         this.container.addEventListener('touchstart', (e) => {
             if (e.touches.length === 2) {
-                initialDistance = Math.hypot(
+                e.preventDefault();
+                touchStartDistance = Math.hypot(
                     e.touches[0].clientX - e.touches[1].clientX,
                     e.touches[0].clientY - e.touches[1].clientY
                 );
-                initialScale = this.currentScale;
+                touchStartScale = this.currentScale;
             }
-        }, { passive: true });
-        
+        }, { passive: false }); // 注意这里改为非passive
+    
         this.container.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 2 && initialDistance) {
+            if (e.touches.length === 2 && touchStartDistance) {
                 e.preventDefault();
-                
+            
                 const currentDistance = Math.hypot(
                     e.touches[0].clientX - e.touches[1].clientX,
                     e.touches[0].clientY - e.touches[1].clientY
                 );
-                
-                const newScale = (currentDistance / initialDistance) * initialScale;
-                this.setScale(newScale);
+            
+                // 计算缩放比例变化
+                const scale = (currentDistance / touchStartDistance) * touchStartScale;
+                this.setScale(scale);
             }
-        }, { passive: false });
+        }, { passive: false }); // 注意这里改为非passive
+    
+        this.container.addEventListener('touchend', () => {
+            touchStartDistance = null;
+        });
         
         // 鼠标滚轮缩放
         this.container.addEventListener('wheel', (e) => {
